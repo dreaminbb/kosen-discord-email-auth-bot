@@ -1,0 +1,14 @@
+{
+  "name": "kosen-auth-discord-bot",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0"
+  }
+}
