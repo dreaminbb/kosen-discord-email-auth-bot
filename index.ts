@@ -1,5 +1,4 @@
-import { REST, Routes } from 'discord.js';
-
+import { Client, Routes, Events, GatewayIntentBits, REST } from 'discord.js';
 
 // commands:
 // - `unregister` : 実行したユーザーのID、メールアドレスをsqliteから削除する
@@ -20,54 +19,107 @@ import { REST, Routes } from 'discord.js';
 
 
 interface Config {
-	discordToken: string
-	discordClientId: string
-	discordGuildId: string
-	permissionInt: number;
+	TOKEN: string
+	CLIENT_ID: string
+	GUILD_ID: string
+	BOT_PERMISSION_INT: number;
 }
 
 class Config {
-	discordToken: string;
-	discordClientId: string;
-	discordGuildId: string;
-	permissionInt: number;
+	TOKEN: string
+	CLIENT_ID: string
+	GUILD_ID: string
+	PERMISSION_INT: number;
+
+	USER_DM_MSG_STRING_AUTH = '高専ゲーム鯖にようこそ。私は高専email認証botです。'
+		+ '\n' + 'あなたがほんとに高専生がどうかを検証し、コミュニティの安定を保ために、学校ログインによる証明を実施しています。'
+		+ "\n\n" + 'おっと。。不審に思われても仕方がないですが。簡単に説明すると、あなたの認証したメールアドレスとユーザーIDを結びつけて、サーバーに保存します。'
+		+ '\n' + '安心してください、メールアドレスはハッシュ化されて保存されますし、取得した情報を第三者にお渡しするなんてことはありません。'
+		+ '\n' + 'ハッシュ化について簡単に説明すると、「もしハッシュ化されたデータを一瞬で復元できるとしたら、1日で億万長者になれるレベル」で復元が不可能な形にして保存するセキュリティ処理です。'
+		+ '\n' + '第三者どころか、bot管理者も復元が不可能です。'
+		+ '\n\n' + 'こちらの認証用のリンクから認証を完了してください。'
+		+ '\n' + 'スパムやbot対策のため、認証用のリンクは15分で無効になり、認証しないまま30分が経過すると自動でキックされます。'
+
+
 
 	constructor() {
-		this.discordToken = process.env.BOT_TOKEN || '';
-		this.discordClientId = process.env.BOT_CLIENT_ID || '';
-		this.discordGuildId = process.env.BOT_GUILD_ID || '';
-		this.permissionInt = parseInt(process.env.BOT_PERMISSION_INT || '0', 0);
-		// console.debug(`Loaded environment variables: BOT_TOKEN=${this.discordToken}, BOT_CLIENT_ID=${this.discordClientId}, BOT_GUILD_ID=${this.discordGuildId}, BOT_PERMISSION_INT=${this.permissionInt}`);
+		this.TOKEN = process.env.BOT_TOKEN || '';
+		this.CLIENT_ID = process.env.BOT_CLIENT_ID || '';
+		this.GUILD_ID = process.env.BOT_GUILD_ID || '';
+		this.PERMISSION_INT = parseInt(process.env.BOT_PERMISSION_INT || '0', 0);
 
 		// 環境変数が設定されていない場合は強制終了する
-		if (!this.discordToken || !this.discordClientId || !this.discordGuildId) {
+		if (!this.TOKEN || !this.CLIENT_ID || !this.GUILD_ID || !this.PERMISSION_INT) {
 			console.error('環境変数が設定されていません。');
 			process.exit(1);
 		}
+
 	}
 
 }
 
-new Config();
+class UserCommunication extends Config {
 
 
-// const commands = [
-// 	{
-// 		name: 'ping',
-// 		description: 'Replies with Pong!',
-// 	},
-// ];
-//
-// const TOKEN = process.env.DISCORD_TOKEN;
-// const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
-// const rest = new REST({ version: '10' }).setToken(TOKEN);
-//
-// try {
-// 	console.log('Started refreshing application (/) commands.');
-//
-// 	await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-//
-// 	console.log('Successfully reloaded application (/) commands.');
-// } catch (error) {
-// 	console.error(error);
-// }
+	// ClientはConfigクラスで初期化されているので、UserCommunicationクラスではthis.clientを使ってDMを送信することができる
+	async sendDM(client: Client, user_id: string): Promise<void> {
+		const user = await client.users.fetch(user_id);
+		await user.send(this.USER_DM_MSG_STRING_AUTH);
+	}
+
+
+}
+
+
+
+async function main(): Promise<void> {
+
+
+	const config: Config = new Config();
+
+	const commands = [
+		{
+			name: 'auth-dm',
+			description: 'DMを送信するコマンド',
+		},
+	];
+
+
+	const rest = new REST({ version: '10' }).setToken(config.TOKEN);
+
+	try {
+		console.log('Started refreshing application (/) commands.');
+
+		await rest.put(Routes.applicationCommands(config.CLIENT_ID), { body: commands });
+
+		console.log('Successfully reloaded application (/) commands.');
+	} catch (error) {
+		console.error(error);
+	}
+
+	const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+	client.on(Events.ClientReady, readyClient => {
+		console.log(`Logged in as ${readyClient.user.tag}!`);
+	});
+
+	client.on(Events.InteractionCreate, async interaction => {
+		if (!interaction.isChatInputCommand()) return;
+
+
+		if (interaction.commandName === 'auth-dm') {
+			await interaction.reply('DMを送信しました！');
+			await new UserCommunication().sendDM(client, interaction.user.id);
+
+		}
+	});
+
+	client.login(config.TOKEN);
+}
+
+// __name__ == "__main__": block
+if (require.main === module) {
+	await main().catch(console.error);
+}
+
+
